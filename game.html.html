@@ -1,0 +1,1240 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ภาวะความสัมพันธ์ของสิ่งมีชีวิต - AR Balloon Game</title>
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts: Kanit -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- MediaPipe Hands & Camera Utils -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+    <style>
+        * {
+            font-family: 'Kanit', sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+
+        body {
+            background: linear-gradient(135deg, #a1c4fd 0%, #c2e9fb 100%);
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* 16:9 Aspect Ratio Frame Container */
+        .game-viewport {
+            width: 100vw;
+            height: calc(100vw * 9 / 16);
+            max-height: 100vh;
+            max-width: calc(100vh * 16 / 9);
+            position: relative;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.25);
+            border-radius: 20px;
+            overflow: hidden;
+            background: linear-gradient(180deg, #e0f2fe 0%, #bae6fd 60%, #7dd3fc 100%);
+        }
+
+        /* Classroom 3D Background Overlay */
+        .bg-classroom {
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(255, 255, 255, 0.8) 0%, transparent 20%),
+                radial-gradient(circle at 90% 80%, rgba(255, 255, 255, 0.6) 0%, transparent 25%),
+                linear-gradient(to bottom, transparent 80%, rgba(125, 211, 252, 0.5) 100%);
+        }
+
+        /* Soft 3D Pastel Glassmorphism Cards */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.88);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 3px solid rgba(255, 255, 255, 0.9);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1), inset 0 2px 4px rgba(255,255,255,0.8);
+        }
+
+        /* AI Glowing Button Effect */
+        .btn-ai-glow {
+            background: linear-gradient(135deg, #a855f7 0%, #ec4899 50%, #6366f1 100%);
+            box-shadow: 0 4px 15px rgba(236, 72, 153, 0.4), 0 0 10px rgba(168, 85, 247, 0.3);
+            transition: all 0.2s ease;
+        }
+        .btn-ai-glow:hover {
+            transform: translateY(-2px) scale(1.02);
+            box-shadow: 0 6px 20px rgba(236, 72, 153, 0.6), 0 0 15px rgba(168, 85, 247, 0.5);
+        }
+        .btn-ai-glow:active {
+            transform: translateY(1px);
+        }
+
+        .glass-pill {
+            background: rgba(255, 255, 255, 0.9);
+            border: 2px solid #ffffff;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+        }
+
+        /* Cute 3D Button Effects */
+        .btn-chibi {
+            transition: all 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: 0 8px 0 rgba(0,0,0,0.15), 0 15px 20px rgba(0,0,0,0.1);
+        }
+        .btn-chibi:active {
+            transform: translateY(6px);
+            box-shadow: 0 2px 0 rgba(0,0,0,0.15), 0 5px 10px rgba(0,0,0,0.1);
+        }
+
+        .balloon-item {
+            position: absolute;
+            cursor: pointer;
+            transition: transform 0.1s ease-out;
+            filter: drop-shadow(0 12px 10px rgba(0,0,0,0.15));
+            will-change: transform, top, left;
+        }
+
+        .balloon-shape {
+            width: 135px;
+            height: 160px;
+            border-radius: 50% 50% 50% 50% / 40% 40% 60% 60%;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 12px;
+            color: #1e293b;
+            font-weight: 700;
+            font-size: 0.95rem;
+            line-height: 1.25;
+            box-shadow: inset -12px -12px 0px rgba(0,0,0,0.08), inset 8px 8px 12px rgba(255,255,255,0.6);
+        }
+
+        .balloon-shape::after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-left: 8px solid transparent;
+            border-right: 8px solid transparent;
+            border-bottom: 12px solid inherit;
+        }
+
+        .balloon-string {
+            width: 2px;
+            height: 45px;
+            background: rgba(100, 116, 139, 0.5);
+            position: absolute;
+            bottom: -55px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        /* Pastel Color Themes for Balloons */
+        .balloon-pink { background-color: #ffb7b2; border-color: #ff9aa2; }
+        .balloon-blue { background-color: #a0c4ff; border-color: #9bf6ff; }
+        .balloon-green { background-color: #b9fbc0; border-color: #8eecf5; }
+        .balloon-yellow { background-color: #fde2e4; border-color: #fff1e6; }
+        .balloon-purple { background-color: #e7c6ff; border-color: #c8b6ff; }
+
+        #hand-cursor {
+            position: absolute;
+            width: 70px;
+            height: 70px;
+            pointer-events: none;
+            z-index: 100;
+            transform: translate(-50%, -50%);
+            transition: width 0.1s, height 0.1s;
+        }
+
+        .fist-ring {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            border: 4px dashed #ff3b30;
+            background: rgba(255, 59, 48, 0.2);
+            animation: spin 3s linear infinite;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 0 20px rgba(255, 59, 48, 0.5);
+        }
+
+        @keyframes spin {
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Question Shake Animation on Wrong Answer */
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-10px); }
+            40%, 80% { transform: translateX(10px); }
+        }
+        .animate-shake {
+            animation: shake 0.4s ease-in-out;
+        }
+
+        /* Mirrored WebCam Layer */
+        #webcam-video {
+            transform: scaleX(-1);
+            object-fit: cover;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="game-viewport bg-classroom flex flex-col justify-between p-4 select-none relative" id="game-container">
+
+        <!-- AR Video Backdrop (Webcam) -->
+        <video id="webcam-video" class="absolute inset-0 w-full h-full opacity-30 pointer-events-none hidden" autoplay playsinline></video>
+        <canvas id="ar-canvas" class="absolute inset-0 w-full h-full pointer-events-none z-0"></canvas>
+
+        <!-- TOP BAR HUD -->
+        <div class="relative z-20 flex items-center justify-between w-full px-2 pt-1">
+            
+            <!-- Game Title & Question Badge -->
+            <div class="flex items-center gap-3">
+                <div class="glass-pill px-4 py-2 rounded-2xl flex items-center gap-2 border-2 border-pink-300">
+                    <span class="text-2xl">🧪</span>
+                    <h1 class="font-extrabold text-slate-800 text-lg md:text-xl tracking-tight">ภาวะความสัมพันธ์ของสิ่งมีชีวิต</h1>
+                </div>
+                <div class="glass-pill px-4 py-2 rounded-2xl bg-amber-100/90 text-amber-800 font-bold text-md shadow-sm">
+                    <i class="fa-solid fa-list-check mr-1 text-amber-500"></i>
+                    ข้อที่ <span id="hud-question-no" class="text-xl text-amber-600 font-black">1</span>/30
+                </div>
+            </div>
+
+            <!-- Score & Timer -->
+            <div class="flex items-center gap-3">
+                <!-- AI Settings Button -->
+                <button id="btn-open-settings" title="ตั้งค่า Gemini API Key" class="glass-pill w-10 h-10 rounded-2xl flex items-center justify-center text-slate-600 hover:text-sky-600 hover:scale-105 transition">
+                    <i class="fa-solid fa-gear text-lg"></i>
+                </button>
+
+                <!-- Score Counter -->
+                <div class="glass-pill px-5 py-2 rounded-2xl bg-emerald-100/90 text-emerald-800 font-bold text-md flex items-center gap-2">
+                    <i class="fa-solid fa-star text-amber-400 text-xl animate-bounce"></i>
+                    <span>คะแนน:</span>
+                    <span id="hud-score" class="text-2xl text-emerald-600 font-black">0</span>
+                </div>
+
+                <!-- Timer Gauge -->
+                <div class="glass-pill px-5 py-2 rounded-2xl bg-rose-100/90 text-rose-800 font-bold text-md flex items-center gap-2">
+                    <i class="fa-solid fa-clock text-rose-500 text-xl"></i>
+                    <span>เวลา:</span>
+                    <span id="hud-timer" class="text-2xl text-rose-600 font-black">90</span>
+                    <span class="text-xs">วิ</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- CENTER AREA: QUESTION PROMPT & BALLOONS PLAYGROUND -->
+        <div class="relative z-10 flex-1 flex flex-col items-center justify-start pt-2" id="play-area">
+            
+            <!-- Question Box -->
+            <div id="question-card" class="glass-card rounded-3xl p-4 md:p-5 max-w-2xl w-full text-center border-4 border-white/80 shadow-2xl transition-all transform duration-300 scale-100 relative">
+                <div class="flex items-center justify-between mb-1 px-1">
+                    <div class="text-xs md:text-sm font-bold text-sky-600 uppercase tracking-wider flex items-center gap-1">
+                        <i class="fa-solid fa-magnifying-glass font-black"></i> จงวิเคราะห์ความสัมพันธ์ของสิ่งมีชีวิตคู่นี้
+                    </div>
+                    <!-- AI Teacher Explanation Button -->
+                    <button id="btn-ask-ai" class="btn-ai-glow text-white text-xs font-extrabold px-3 py-1.5 rounded-xl flex items-center gap-1.5 cursor-pointer">
+                        <i class="fa-solid fa-wand-magic-sparkles text-amber-300 animate-pulse"></i>
+                        <span>ถามครูวิทย์ AI</span>
+                    </button>
+                </div>
+
+                <!-- Question Visual & Name -->
+                <div class="flex items-center justify-center gap-4 my-1">
+                    <div id="q-emoji" class="text-4xl md:text-5xl bg-white/80 p-3 rounded-2xl shadow-inner border border-sky-100">🪨</div>
+                    <div class="text-left">
+                        <div id="q-pair-title" class="text-2xl md:text-3xl font-black text-slate-800 tracking-wide">รา กับ สาหร่าย (ไลเคน)</div>
+                        <div id="q-desc" class="text-sm md:text-base text-slate-600 font-medium">แยกกันอยู่ไม่ได้ ทั้งสองฝ่ายได้ประโยชน์</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Toast / Feedback Warning Message -->
+            <div id="feedback-toast" class="absolute top-28 z-30 opacity-0 pointer-events-none transition-all duration-300 transform translate-y-2">
+                <div id="toast-bg" class="bg-rose-500 text-white px-6 py-2 rounded-full font-extrabold text-lg shadow-xl flex items-center gap-2 border-2 border-white">
+                    <i id="toast-icon" class="fa-solid fa-circle-xmark"></i>
+                    <span id="toast-msg">ยังไม่ถูกนะ ลองอีกครั้ง!</span>
+                </div>
+            </div>
+
+            <!-- Floating Balloons Container -->
+            <div id="balloons-container" class="absolute inset-0 overflow-hidden pointer-events-auto">
+                <!-- Balloons dynamically injected via JS -->
+            </div>
+        </div>
+
+        <!-- PUNCH CURSOR FOR HAND TRACKING -->
+        <div id="hand-cursor" class="hidden">
+            <div class="fist-ring">
+                <span class="text-3xl">👊</span>
+            </div>
+        </div>
+
+        <!-- START SCREEN OVERLAY -->
+        <div id="start-modal" class="absolute inset-0 z-50 glass-card bg-sky-900/40 backdrop-blur-md flex items-center justify-center p-6">
+            <div class="bg-white rounded-3xl p-8 max-w-xl w-full text-center shadow-2xl border-4 border-sky-300 relative overflow-hidden">
+                <div class="absolute -top-10 -right-10 w-32 h-32 bg-yellow-200 rounded-full blur-2xl opacity-60"></div>
+                
+                <div class="text-5xl mb-2 animate-bounce">🎈🔬</div>
+                <h2 class="text-3xl md:text-4xl font-extrabold text-slate-800 mb-2">ภาวะความสัมพันธ์ของสิ่งมีชีวิต</h2>
+                <p class="text-sky-600 font-medium mb-6">เกมชกลูกโป่ง AR เรียนรู้วิทยาศาสตร์สุดสนุก!</p>
+
+                <!-- Instructions -->
+                <div class="bg-sky-50 rounded-2xl p-4 text-left text-slate-700 text-sm md:text-base mb-6 space-y-2 border border-sky-100">
+                    <div class="font-bold text-sky-800 mb-1 flex items-center gap-2">
+                        <i class="fa-solid fa-gamepad"></i> กติกาการเล่น:
+                    </div>
+                    <div class="flex items-start gap-2">
+                        <span>1.</span>
+                        <span>ตอบคำถามวิชาวิทยาศาสตร์ทั้งหมด <b>30 ข้อ</b> ในเวลา <b>90 วินาที</b></span>
+                    </div>
+                    <div class="flex items-start gap-2">
+                        <span>2.</span>
+                        <span>ใช้มือชก/แตะ<b>ลูกโป่งคำตอบ</b>ที่ถูกต้องที่ลอยขึ้นมา</span>
+                    </div>
+                    <div class="flex items-start gap-2">
+                        <span>3.</span>
+                        <span>ตอบถูกได้ <b>+10 คะแนน</b> / ตอบผิดหัก <b>-5 คะแนน</b></span>
+                    </div>
+                </div>
+
+                <!-- Camera Toggle Controls -->
+                <div class="mb-6 flex items-center justify-center gap-4 bg-slate-100 p-3 rounded-2xl">
+                    <label class="flex items-center gap-3 cursor-pointer select-none">
+                        <input type="checkbox" id="camera-toggle" class="w-5 h-5 accent-sky-500 rounded cursor-pointer" checked>
+                        <span class="font-bold text-slate-700 text-sm md:text-base">
+                            <i class="fa-solid fa-camera text-sky-500 mr-1"></i> เปิดใช้งานกล้อง AR (Hand Detection)
+                        </span>
+                    </label>
+                </div>
+
+                <!-- Start Button -->
+                <div class="flex flex-col gap-3">
+                    <button id="btn-start-game" class="btn-chibi w-full bg-gradient-to-r from-emerald-400 to-teal-500 hover:from-emerald-500 hover:to-teal-600 text-white font-extrabold text-xl py-4 rounded-2xl shadow-lg border-2 border-emerald-200">
+                        🚀 เริ่มเล่นเกมเลย!
+                    </button>
+                    <!-- AI Generate New Questions Button -->
+                    <button id="btn-gen-ai-questions-start" class="btn-ai-glow w-full text-white font-extrabold text-base py-3 rounded-2xl shadow-md border-2 border-purple-200 flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-sparkles text-amber-300"></i>
+                        <span>✨ สุ่มสร้างชุดโจทย์ใหม่ด้วย Gemini AI</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- GAME OVER / SUMMARY SCREEN OVERLAY -->
+        <div id="gameover-modal" class="absolute inset-0 z-50 glass-card bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-6 hidden">
+            <div class="bg-white rounded-3xl p-8 max-w-lg w-full text-center shadow-2xl border-4 border-amber-300 relative">
+                <div class="text-6xl mb-2">🏆</div>
+                <h2 class="text-3xl font-extrabold text-slate-800 mb-1">สรุปผลการเล่น</h2>
+                <p id="summary-subtitle" class="text-slate-500 font-medium mb-6">เก่งมากเลยนักเรียน!</p>
+
+                <!-- Stars Rating -->
+                <div id="stars-container" class="flex justify-center gap-3 text-4xl mb-6">
+                    <i class="fa-solid fa-star text-amber-400"></i>
+                    <i class="fa-solid fa-star text-amber-400"></i>
+                    <i class="fa-solid fa-star text-amber-400"></i>
+                </div>
+
+                <!-- Stats Summary Grid -->
+                <div class="grid grid-cols-2 gap-4 mb-6">
+                    <div class="bg-emerald-50 border border-emerald-200 p-4 rounded-2xl text-center">
+                        <div class="text-xs text-emerald-600 font-bold uppercase">คะแนนรวม</div>
+                        <div id="final-score" class="text-4xl font-black text-emerald-600">0</div>
+                    </div>
+                    <div class="bg-sky-50 border border-sky-200 p-4 rounded-2xl text-center">
+                        <div class="text-xs text-sky-600 font-bold uppercase">ตอบถูก/ทั้งหมด</div>
+                        <div id="final-correct" class="text-4xl font-black text-sky-600">0/30</div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="flex flex-col gap-3">
+                    <button id="btn-restart-game" class="btn-chibi w-full bg-gradient-to-r from-sky-400 to-indigo-500 hover:from-sky-500 hover:to-indigo-600 text-white font-extrabold text-xl py-4 rounded-2xl shadow-lg border-2 border-sky-200">
+                        🔄 เล่นอีกครั้ง
+                    </button>
+                    <button id="btn-gen-ai-questions-over" class="btn-ai-glow w-full text-white font-extrabold text-base py-3 rounded-2xl shadow-md border-2 border-purple-200 flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-wand-magic-sparkles text-amber-300"></i>
+                        <span>✨ สุ่มสร้างคำถามชุดใหม่ด้วย AI</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- AI TEACHER EXPLANATION MODAL -->
+        <div id="ai-modal" class="absolute inset-0 z-50 glass-card bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-6 hidden">
+            <div class="bg-white rounded-3xl p-6 max-w-lg w-full text-center shadow-2xl border-4 border-purple-300 relative">
+                <button id="btn-close-ai-modal" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 text-2xl font-black">&times;</button>
+                
+                <div class="flex items-center justify-center gap-3 mb-3">
+                    <div class="w-14 h-14 bg-purple-100 rounded-2xl flex items-center justify-center text-3xl border border-purple-200 shadow-sm">
+                        🤖
+                    </div>
+                    <div class="text-left">
+                        <h3 class="text-xl font-extrabold text-slate-800">คำอธิบายจากครูวิทย์ AI</h3>
+                        <p class="text-xs text-purple-600 font-medium">ขับเคลื่อนด้วย Gemini 3 Flash & TTS</p>
+                    </div>
+                </div>
+
+                <div id="ai-loading" class="py-8 flex flex-col items-center justify-center gap-3">
+                    <div class="w-10 h-10 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin"></div>
+                    <p class="text-sm font-bold text-purple-700 animate-pulse">กำลังสอบถามครูวิทย์ AI...</p>
+                </div>
+
+                <div id="ai-content" class="hidden text-left bg-purple-50 p-4 rounded-2xl border border-purple-100 mb-5">
+                    <p id="ai-text-explanation" class="text-slate-700 font-medium text-sm md:text-base leading-relaxed">
+                        -- ข้อความคำอธิบาย --
+                    </p>
+                </div>
+
+                <!-- Voice Audio Play Button -->
+                <div class="flex items-center justify-between gap-3">
+                    <button id="btn-speak-tts" class="btn-chibi flex-1 bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-500 hover:to-orange-600 text-white font-extrabold text-md py-3 rounded-2xl shadow flex items-center justify-center gap-2 border border-amber-200 disabled:opacity-50">
+                        <i class="fa-solid fa-volume-high"></i>
+                        <span id="tts-btn-label">🔊 ฟังเสียงครูวิทย์ AI</span>
+                    </button>
+                    <button id="btn-ok-ai-modal" class="px-6 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-2xl transition">
+                        เข้าใจแล้ว
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- GEMINI API KEY SETTINGS MODAL -->
+        <div id="settings-modal" class="absolute inset-0 z-50 glass-card bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-6 hidden">
+            <div class="bg-white rounded-3xl p-6 max-w-md w-full text-center shadow-2xl border-4 border-sky-300 relative">
+                <button id="btn-close-settings" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 text-2xl font-black">&times;</button>
+                
+                <div class="text-4xl mb-2">⚙️</div>
+                <h3 class="text-2xl font-extrabold text-slate-800 mb-1">ตั้งค่า Gemini API</h3>
+                <p class="text-xs text-slate-500 mb-4">ใส่ Gemini API Key ของคุณเพื่อใช้งานระบบคำอธิบายครูวิทย์ AI และการสร้างโจทย์อัตโนมัติ</p>
+
+                <div class="text-left mb-4">
+                    <label class="block text-xs font-bold text-slate-700 mb-1">Gemini API Key:</label>
+                    <input type="password" id="input-api-key" placeholder="ป้อน API Key ที่นี่ (หากเว้นว่างจะใช้คีย์เริ่มต้น)" class="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-sky-500 focus:outline-none text-sm font-mono">
+                </div>
+
+                <button id="btn-save-settings" class="btn-chibi w-full bg-sky-500 hover:bg-sky-600 text-white font-extrabold text-md py-3 rounded-xl shadow border border-sky-300">
+                    💾 บันทึกการตั้งค่า
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // 30 Scientific Quiz Questions for Symbiotic Relationships
+        const QUESTIONS_DATA = [
+            { id: 1, pair: "รา กับ สาหร่าย (ไลเคน)", emoji: "🍄🌱", desc: "แยกกันอยู่ไม่ได้ ได้ประโยชน์ทั้งสองฝ่าย", answer: "ภาวะพึ่งพากัน (+/+)" },
+            { id: 2, pair: "นกเอี้ยง กับ ควาย", emoji: "🐦🐃", desc: "แยกกันอยู่ได้ ได้ประโยชน์ทั้งสองฝ่าย", answer: "ภาวะได้ประโยชน์ร่วมกัน (+/+)" },
+            { id: 3, pair: "กล้วยไม้ บน ต้นไม้ใหญ่", emoji: "🌸🌳", desc: "กล้วยไม้ได้ที่อยู่ ต้นไม้ไม่ได้และไม่เสียประโยชน์", answer: "ภาวะอิงอาศัย (+/0)" },
+            { id: 4, pair: "เห็บ กับ สุนัข", emoji: "🕷️🐕", desc: "เห็บดูดเลือด สุนัขเสียเลือดและเป็นแผล", answer: "ภาวะปรสิต (+/-)" },
+            { id: 5, pair: "เสือ กับ กวาง", emoji: "🐅🦌", desc: "เสือเป็นผู้ล่า กวางเป็นเหยื่อ", answer: "ภาวะล่าเหยื่อ (+/-)" },
+            { id: 6, pair: "แบคทีเรียไรโซเบียม ในปมรากถั่ว", emoji: "🦠🫘", desc: "ตรึงไนโตรเจนให้พืช พืชให้ที่อยู่อาศัย (แยกไม่ได้)", answer: "ภาวะพึ่งพากัน (+/+)" },
+            { id: 7, pair: "ดอกไม้ทะเล กับ ปลาการ์ตูน", emoji: "🪸🐠", desc: "ปลาได้ที่หลบภัย ดอกไม้ทะเลได้เศษอาหาร (แยกได้)", answer: "ภาวะได้ประโยชน์ร่วมกัน (+/+)" },
+            { id: 8, pair: "เฟิร์น บน ต้นไม้ใหญ่", emoji: "🌿🌲", desc: "เฟิร์นเกาะรับแสง ต้นไม้ใหญ่ไม่ได้รับผลกระทบ", answer: "ภาวะอิงอาศัย (+/0)" },
+            { id: 9, pair: "พยาธิ ใน ลำไส้มนุษย์", emoji: "🪱🧍", desc: "พยาธิแย่งสารอาหาร มนุษย์ป่วยและขาดสารอาหาร", answer: "ภาวะปรสิต (+/-)" },
+            { id: 10, pair: "นกอินทรี กับ หนู", emoji: "🦅🐀", desc: "นกอินทรีโฉบจับหนูกินเป็นอาหาร", answer: "ภาวะล่าเหยื่อ (+/-)" },
+            { id: 11, pair: "โพรโทซัว ใน ลำไส้ปลวก", emoji: "🪵🪳", desc: "โพรโทซัวช่วยย่อยไม้ ปลวกให้อาหารและที่อยู่ (ขาดไม่ได้)", answer: "ภาวะพึ่งพากัน (+/+)" },
+            { id: 12, pair: "ผึ้ง กับ ดอกไม้", emoji: "🐝🌻", desc: "ผึ้งได้น้ำหวาน ดอกไม้ได้รับการผสมเกสร (แยกได้)", answer: "ภาวะได้ประโยชน์ร่วมกัน (+/+)" },
+            { id: 13, pair: "ฉลาม กับ เหาฉลาม", emoji: "🦈🐟", desc: "เหาฉลามเกาะกินเศษอาหาร ฉลามไม่ได้และไม่เสียประโยชน์", answer: "ภาวะอิงอาศัย (+/0)" },
+            { id: 14, pair: "ยุง กับ มนุษย์", emoji: "🦟🧍", desc: "ยุงดูดเลือดมนุษย์ มนุษย์เจ็บและอาจติดเชื้อโรค", answer: "ภาวะปรสิต (+/-)" },
+            { id: 15, pair: "กบ กับ แมลง", emoji: "🐸🦟", desc: "กบใช้ลิ้นจับแมลงกินเป็นอาหาร", answer: "ภาวะล่าเหยื่อ (+/-)" },
+            { id: 16, pair: "แบคทีเรีย E. coli ในลำไส้ใหญ่มนุษย์", emoji: "🦠💊", desc: "ผลิตวิตามิน K ให้มนุษย์ มนุษย์ให้ที่อยู่และอาหาร", answer: "ภาวะพึ่งพากัน (+/+)" },
+            { id: 17, pair: "ปูเสฉวน กับ ดอกไม้ทะเล", emoji: "🦀🪸", desc: "ดอกไม้ทะเลช่วยพรางตา ปูพาเคลื่อนที่หาอาหาร", answer: "ภาวะได้ประโยชน์ร่วมกัน (+/+)" },
+            { id: 18, pair: "นก ทำรัง บน ต้นไม้", emoji: "🪺🌳", desc: "นกได้ที่อยู่อาศัยหลบภัย ต้นไม้ไม่ได้รับผลกระทบ", answer: "ภาวะอิงอาศัย (+/0)" },
+            { id: 19, pair: "กาฝาก บน ต้นมะม่วง", emoji: "🌿🌳", desc: "กาฝากดูดน้ำเลี้ยง ต้นมะม่วงแคระแกร็นและอาจตาย", answer: "ภาวะปรสิต (+/-)" },
+            { id: 20, pair: "สิงโต กับ ม้าลาย", emoji: "🦁🦓", desc: "สิงโตล่าม้าลายเป็นอาหารในทุ่งหญ้า", answer: "ภาวะล่าเหยื่อ (+/-)" },
+            { id: 21, pair: "มดดำ กับ เพลี้ย", emoji: "🐜🐛", desc: "มดได้น้ำหวาน เพลี้ยได้รับการคุ้มกันภัย", answer: "ภาวะได้ประโยชน์ร่วมกัน (+/+)" },
+            { id: 22, pair: "พลูด่าง เกาะ บน ต้นไม้ใหญ่", emoji: "🌱🌲", desc: "พลูด่างใช้ยึดเกาะหาแสง ต้นไม้ไม่เสียประโยชน์", answer: "ภาวะอิงอาศัย (+/0)" },
+            { id: 23, pair: "หมัด กับ สุนัข", emoji: "🪲🐕", desc: "หมัดดูดเลือด สุนัขคันและเป็นโรคผิวหนัง", answer: "ภาวะปรสิต (+/-)" },
+            { id: 24, pair: "งู กับ เขียด", emoji: "🐍🐸", desc: "งูฉกเขียดกินเป็นอาหาร", answer: "ภาวะล่าเหยื่อ (+/-)" },
+            { id: 25, pair: "เชื้อราไมคอร์ไรซา กับ รากพืช", emoji: "🍄🌾", desc: "ราช่วยดูดธาตุอาหาร พืชให้สารอาหารอินทรีย์", answer: "ภาวะพึ่งพากัน (+/+)" },
+            { id: 26, pair: "นกกระจิบ ตื่นกินแมลง บน หลังช้าง", emoji: "🐦🐘", desc: "นกได้กินแมลง ช้างรำคาญแมลงลดลง", answer: "ภาวะได้ประโยชน์ร่วมกัน (+/+)" },
+            { id: 27, pair: "ชายผ้าสีดา บน ต้นไม้", emoji: "🌿🌳", desc: "เฟิร์นชายผ้าสีดาเกาะรับแสง ไม่แย่งอาหารต้นไม้", answer: "ภาวะอิงอาศัย (+/0)" },
+            { id: 28, pair: "เชื้อราสาเหตุ โรคกลากบนผิวหนัง", emoji: "🍄🦠", desc: "เชื้อราเจริญบนผิวหนัง มนุษย์เกิดคันและระคายเคือง", answer: "ภาวะปรสิต (+/-)" },
+            { id: 29, pair: "แมงมุม กับ แมลง", emoji: "🕷️🪰", desc: "แมงมุมสร้างใยดักจับแมลงกิน", answer: "ภาวะล่าเหยื่อ (+/-)" },
+            { id: 30, pair: "เพรียงหิน เกาะ บน หลังวาฬ", emoji: "🐚🐋", desc: "เพรียงเกาะเคลื่อนที่ไปหาอาหาร วาฬไม่เดือดร้อน", answer: "ภาวะอิงอาศัย (+/0)" }
+        ];
+
+        // 5 Fixed Relationship Categories
+        const RELATIONSHIP_TYPES = [
+            "ภาวะพึ่งพากัน (+/+)",
+            "ภาวะได้ประโยชน์ร่วมกัน (+/+)",
+            "ภาวะอิงอาศัย (+/0)",
+            "ภาวะปรสิต (+/-)",
+            "ภาวะล่าเหยื่อ (+/-)"
+        ];
+
+        // Web Audio Synthesizer (No external sound files required)
+        const audioFx = {
+            ctx: null,
+            init() {
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+            },
+            playPop() {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(400, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(800, this.ctx.currentTime + 0.08);
+                gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.08);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.08);
+            },
+            playCorrect() {
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                [523.25, 659.25, 783.99, 1046.50].forEach((freq, idx) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.value = freq;
+                    gain.gain.setValueAtTime(0.2, now + idx * 0.08);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + idx * 0.08 + 0.15);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(now + idx * 0.08);
+                    osc.stop(now + idx * 0.08 + 0.15);
+                });
+            },
+            playWrong() {
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(180, now);
+                osc.frequency.linearRampToValueAtTime(110, now + 0.25);
+                gain.gain.setValueAtTime(0.25, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(now);
+                osc.stop(now + 0.25);
+            }
+        };
+
+        // Game State Variables
+        const gameState = {
+            questionsList: [],
+            currentQuestionIdx: 0,
+            score: 0,
+            correctCount: 0,
+            timeLeft: 90,
+            timerInterval: null,
+            isPlaying: false,
+            activeBalloons: [],
+            handX: -100,
+            handY: -100
+        };
+
+        // Gemini API Configuration
+        let customGeminiKey = localStorage.getItem('gemini_api_key') || "";
+        let currentAiExplanation = "";
+        let audioPlayer = null;
+
+        function getApiKey() {
+            return customGeminiKey || "";
+        }
+
+        // DOM Element Cache
+        const elements = {
+            hudQuestionNo: document.getElementById('hud-question-no'),
+            hudScore: document.getElementById('hud-score'),
+            hudTimer: document.getElementById('hud-timer'),
+            qEmoji: document.getElementById('q-emoji'),
+            qPairTitle: document.getElementById('q-pair-title'),
+            qDesc: document.getElementById('q-desc'),
+            questionCard: document.getElementById('question-card'),
+            balloonsContainer: document.getElementById('balloons-container'),
+            handCursor: document.getElementById('hand-cursor'),
+            feedbackToast: document.getElementById('feedback-toast'),
+            toastMsg: document.getElementById('toast-msg'),
+            startModal: document.getElementById('start-modal'),
+            gameoverModal: document.getElementById('gameover-modal'),
+            finalScore: document.getElementById('final-score'),
+            finalCorrect: document.getElementById('final-correct'),
+            summarySubtitle: document.getElementById('summary-subtitle'),
+            starsContainer: document.getElementById('stars-container'),
+            btnStart: document.getElementById('btn-start-game'),
+            btnRestart: document.getElementById('btn-restart-game'),
+            cameraToggle: document.getElementById('camera-toggle'),
+            video: document.getElementById('webcam-video'),
+            arCanvas: document.getElementById('ar-canvas')
+        };
+
+        const aiModalElements = {
+            btnAskAi: document.getElementById('btn-ask-ai'),
+            aiModal: document.getElementById('ai-modal'),
+            btnCloseAiModal: document.getElementById('btn-close-ai-modal'),
+            btnOkAiModal: document.getElementById('btn-ok-ai-modal'),
+            aiLoading: document.getElementById('ai-loading'),
+            aiContent: document.getElementById('ai-content'),
+            aiTextExplanation: document.getElementById('ai-text-explanation'),
+            btnSpeakTts: document.getElementById('btn-speak-tts'),
+            ttsBtnLabel: document.getElementById('tts-btn-label'),
+            btnGenAiStart: document.getElementById('btn-gen-ai-questions-start'),
+            btnGenAiOver: document.getElementById('btn-gen-ai-questions-over'),
+            btnOpenSettings: document.getElementById('btn-open-settings'),
+            settingsModal: document.getElementById('settings-modal'),
+            btnCloseSettings: document.getElementById('btn-close-settings'),
+            btnSaveSettings: document.getElementById('btn-save-settings'),
+            inputApiKey: document.getElementById('input-api-key')
+        };
+
+        async function fetchGeminiExplanation(pair, desc, answer) {
+            const apiKey = getApiKey();
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+            
+            const systemPrompt = "คุณคือครูวิทยาศาสตร์ใจดี สอนนักเรียนระดับประถมและมัธยมต้น หน้าที่ของคุณคืออธิบายเหตุผลของภาวะความสัมพันธ์ของสิ่งมีชีวิตอย่างกระชับ สั้น สนุก เข้าใจง่าย ไม่เกิน 2 ประโยค ให้ความรู้ทางวิทยาศาสตร์ เป็นภาษาไทยสุภาพน่าฟัง";
+            const userQuery = `ช่วยอธิบายว่าทำไมสิ่งมีชีวิตคู่นี้: "${pair}" (พฤติกรรม: ${desc}) ถึงจัดเป็น "${answer}" ?`;
+
+            const payload = {
+                contents: [{ parts: [{ text: userQuery }] }],
+                systemInstruction: { parts: [{ text: systemPrompt }] }
+            };
+
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                throw new Error(`API error: ${response.status}`);
+            }
+
+            const data = await response.json();
+            return data.candidates?.[0]?.content?.parts?.[0]?.text || "ไม่สามารถดึงข้อมูลอธิบายได้ในขณะนี้";
+        }
+
+        async function fetchGeminiTTS(textToRead) {
+            const apiKey = getApiKey();
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${apiKey}`;
+
+            const payload = {
+                contents: [{ parts: [{ text: `พูดด้วยน้ำเสียงครูวิทยาศาสตร์ใจดี สดใส ชัดเจน: ${textToRead}` }] }],
+                generationConfig: {
+                    responseModalities: ["AUDIO"],
+                    speechConfig: {
+                        voiceConfig: {
+                            prebuiltVoiceConfig: { voiceName: "Aoede" }
+                        }
+                    }
+                },
+                model: "gemini-2.5-flash-preview-tts"
+            };
+
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) throw new Error("TTS generation failed");
+
+            const result = await response.json();
+            const part = result?.candidates?.[0]?.content?.parts?.[0];
+            const audioData = part?.inlineData?.data;
+            const mimeType = part?.inlineData?.mimeType;
+
+            if (audioData && mimeType && mimeType.startsWith("audio/")) {
+                const sampleRateMatch = mimeType.match(/rate=(\d+)/);
+                const sampleRate = sampleRateMatch ? parseInt(sampleRateMatch[1], 10) : 24000;
+                
+                const pcm16 = base64ToInt16Array(audioData);
+                const wavBlob = pcmToWav(pcm16, sampleRate);
+                return URL.createObjectURL(wavBlob);
+            }
+            throw new Error("Invalid audio response format");
+        }
+
+        async function generateAiQuestionsSet() {
+            const apiKey = getApiKey();
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+
+            const prompt = `สุ่มสร้างโจทย์วิชาวิทยาศาสตร์เรื่อง "ภาวะความสัมพันธ์ของสิ่งมีชีวิต" จำนวน 10 ข้อ โดยประกอบด้วยสิ่งมีชีวิตคู่นี้ Emoji อธิบายสั้นๆ และเฉลย โดยคำตอบที่ถูกต้องต้องเป็น 1 ใน 5 คำตอบต่อไปนี้เท่านั้น:
+1. ภาวะพึ่งพากัน (+/+)
+2. ภาวะได้ประโยชน์ร่วมกัน (+/+)
+3. ภาวะอิงอาศัย (+/0)
+4. ภาวะปรสิต (+/-)
+5. ภาวะล่าเหยื่อ (+/-)`;
+
+            const payload = {
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: "ARRAY",
+                        items: {
+                            type: "OBJECT",
+                            properties: {
+                                pair: { type: "STRING" },
+                                emoji: { type: "STRING" },
+                                desc: { type: "STRING" },
+                                answer: { type: "STRING" }
+                            },
+                            propertyOrdering: ["pair", "emoji", "desc", "answer"]
+                        }
+                    }
+                }
+            };
+
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) throw new Error("Failed to generate AI questions");
+
+            const data = await response.json();
+            const jsonText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+            return JSON.parse(jsonText);
+        }
+
+        function base64ToInt16Array(base64) {
+            const binaryString = atob(base64);
+            const len = binaryString.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            return new Int16Array(bytes.buffer);
+        }
+
+        function pcmToWav(pcm16Data, sampleRate = 24000) {
+            const buffer = new ArrayBuffer(44 + pcm16Data.length * 2);
+            const view = new DataView(buffer);
+
+            const writeString = (offset, str) => {
+                for (let i = 0; i < str.length; i++) {
+                    view.setUint8(offset + i, str.charCodeAt(i));
+                }
+            };
+
+            writeString(0, 'RIFF');
+            view.setUint32(4, 36 + pcm16Data.length * 2, true);
+            writeString(8, 'WAVE');
+            writeString(12, 'fmt ');
+            view.setUint32(16, 16, true);
+            view.setUint16(20, 1, true);
+            view.setUint16(22, 1, true);
+            view.setUint32(24, sampleRate, true);
+            view.setUint32(28, sampleRate * 2, true);
+            view.setUint16(32, 2, true);
+            view.setUint16(34, 16, true);
+            writeString(36, 'data');
+            view.setUint32(40, pcm16Data.length * 2, true);
+
+            let offset = 44;
+            for (let i = 0; i < pcm16Data.length; i++, offset += 2) {
+                view.setInt16(offset, pcm16Data[i], true);
+            }
+
+            return new Blob([buffer], { type: 'audio/wav' });
+        }
+
+        function spawnBalloons(question) {
+            elements.balloonsContainer.innerHTML = '';
+            gameState.activeBalloons = [];
+
+            const correctAnswer = question.answer;
+            const wrongChoices = RELATIONSHIP_TYPES.filter(type => type !== correctAnswer);
+            const selectedWrong = wrongChoices.sort(() => Math.random() - 0.5).slice(0, 3);
+            const choices = [correctAnswer, ...selectedWrong].sort(() => Math.random() - 0.5);
+
+            const colors = ['balloon-pink', 'balloon-blue', 'balloon-green', 'balloon-yellow', 'balloon-purple'];
+            const containerWidth = elements.balloonsContainer.clientWidth || 800;
+            const containerHeight = elements.balloonsContainer.clientHeight || 500;
+            const slotWidth = containerWidth / 4;
+
+            choices.forEach((text, index) => {
+                const balloonEl = document.createElement('div');
+                balloonEl.className = 'balloon-item';
+                
+                const colorClass = colors[index % colors.length];
+
+                balloonEl.innerHTML = `
+                    <div class="balloon-shape ${colorClass}">
+                        <span>${text}</span>
+                        <div class="balloon-string"></div>
+                    </div>
+                `;
+
+                const minX = index * slotWidth + 20;
+                const maxX = (index + 1) * slotWidth - 140;
+                const startX = Math.max(10, minX + Math.random() * Math.max(10, maxX - minX));
+                const startY = containerHeight + 30 + Math.random() * 80;
+                const speed = 0.8 + Math.random() * 0.7;
+
+                balloonEl.style.left = `${startX}px`;
+                balloonEl.style.top = `${startY}px`;
+
+                balloonEl.addEventListener('pointerdown', (e) => {
+                    e.stopPropagation();
+                    const balloonObj = gameState.activeBalloons.find(b => b.element === balloonEl);
+                    if (balloonObj) {
+                        popBalloon(balloonObj, balloonObj.isCorrect);
+                    }
+                });
+
+                elements.balloonsContainer.appendChild(balloonEl);
+
+                const balloonObj = {
+                    element: balloonEl,
+                    x: startX,
+                    y: startY,
+                    speed: speed,
+                    text: text,
+                    isCorrect: text === correctAnswer,
+                    width: 135,
+                    height: 160,
+                    popped: false,
+                    driftAngle: Math.random() * Math.PI * 2
+                };
+
+                gameState.activeBalloons.push(balloonObj);
+            });
+        }
+
+        function updateBalloons() {
+            if (!gameState.isPlaying) return;
+
+            const containerHeight = elements.balloonsContainer.clientHeight;
+            const containerWidth = elements.balloonsContainer.clientWidth;
+
+            gameState.activeBalloons.forEach(b => {
+                if (b.popped) return;
+
+                b.y -= b.speed;
+                b.driftAngle += 0.03;
+                b.x += Math.sin(b.driftAngle) * 0.8;
+
+                if (b.x < 10) b.x = 10;
+                if (b.x > containerWidth - b.width - 10) b.x = containerWidth - b.width - 10;
+
+                if (b.y < -b.height - 20) {
+                    b.y = containerHeight + 20;
+                }
+
+                b.element.style.left = `${b.x}px`;
+                b.element.style.top = `${b.y}px`;
+
+                checkHandCollision(b);
+            });
+
+            requestAnimationFrame(updateBalloons);
+        }
+
+        function checkHandCollision(balloon) {
+            if (balloon.popped || gameState.handX < 0 || gameState.handY < 0) return;
+
+            const balloonCenterX = balloon.x + balloon.width / 2;
+            const balloonCenterY = balloon.y + balloon.height / 2;
+
+            const dist = Math.hypot(gameState.handX - balloonCenterX, gameState.handY - balloonCenterY);
+
+            if (dist < 75) {
+                popBalloon(balloon, balloon.isCorrect);
+            }
+        }
+
+        function popBalloon(balloon, isCorrect) {
+            if (balloon.popped || !gameState.isPlaying) return;
+            balloon.popped = true;
+
+            balloon.element.style.transform = "scale(1.4)";
+            balloon.element.style.opacity = "0";
+            audioFx.playPop();
+
+            createSparkles(balloon.x + balloon.width / 2, balloon.y + balloon.height / 2);
+
+            setTimeout(() => {
+                balloon.element.remove();
+            }, 150);
+
+            if (isCorrect) {
+                audioFx.playCorrect();
+                gameState.score += 10;
+                gameState.correctCount++;
+                elements.hudScore.textContent = gameState.score;
+                showToast("ถูกต้องแล้ว! 🎉 +10", true);
+
+                setTimeout(() => {
+                    nextQuestion();
+                }, 800);
+            } else {
+                audioFx.playWrong();
+                gameState.score = Math.max(0, gameState.score - 5);
+                elements.hudScore.textContent = gameState.score;
+                
+                elements.questionCard.classList.add('animate-shake');
+                setTimeout(() => elements.questionCard.classList.remove('animate-shake'), 400);
+
+                showToast("ยังไม่ถูกนะ ลองอีกครั้ง! -5", false);
+            }
+        }
+
+        function createSparkles(x, y) {
+            const ctx = elements.arCanvas.getContext('2d');
+            const particles = [];
+            const particleCount = 25;
+
+            for (let i = 0; i < particleCount; i++) {
+                particles.push({
+                    x: x,
+                    y: y,
+                    vx: (Math.random() - 0.5) * 12,
+                    vy: (Math.random() - 0.5) * 12,
+                    radius: Math.random() * 6 + 4,
+                    color: `hsl(${Math.random() * 360}, 90%, 65%)`,
+                    alpha: 1
+                });
+            }
+
+            function renderParticles() {
+                ctx.clearRect(0, 0, elements.arCanvas.width, elements.arCanvas.height);
+                let alive = false;
+
+                particles.forEach(p => {
+                    if (p.alpha > 0) {
+                        alive = true;
+                        p.x += p.vx;
+                        p.y += p.vy;
+                        p.alpha -= 0.03;
+
+                        ctx.save();
+                        ctx.globalAlpha = Math.max(0, p.alpha);
+                        ctx.fillStyle = p.color;
+                        ctx.beginPath();
+                        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.restore();
+                    }
+                });
+
+                if (alive) {
+                    requestAnimationFrame(renderParticles);
+                } else {
+                    ctx.clearRect(0, 0, elements.arCanvas.width, elements.arCanvas.height);
+                }
+            }
+
+            renderParticles();
+        }
+
+        function showToast(msg, isSuccess) {
+            elements.toastMsg.textContent = msg;
+            const toastBg = document.getElementById('toast-bg');
+            if (isSuccess) {
+                toastBg.className = "bg-emerald-500 text-white px-6 py-2 rounded-full font-extrabold text-lg shadow-xl flex items-center gap-2 border-2 border-white";
+            } else {
+                toastBg.className = "bg-rose-500 text-white px-6 py-2 rounded-full font-extrabold text-lg shadow-xl flex items-center gap-2 border-2 border-white";
+            }
+
+            elements.feedbackToast.classList.remove('opacity-0', 'pointer-events-none', 'translate-y-2');
+            elements.feedbackToast.classList.add('opacity-100', 'translate-y-0');
+
+            setTimeout(() => {
+                elements.feedbackToast.classList.remove('opacity-100', 'translate-y-0');
+                elements.feedbackToast.classList.add('opacity-0', 'pointer-events-none', 'translate-y-2');
+            }, 1200);
+        }
+
+        function loadQuestion() {
+            const currentQ = gameState.questionsList[gameState.currentQuestionIdx];
+            elements.hudQuestionNo.textContent = gameState.currentQuestionIdx + 1;
+            elements.qEmoji.textContent = currentQ.emoji;
+            elements.qPairTitle.textContent = currentQ.pair;
+            elements.qDesc.textContent = currentQ.desc;
+
+            spawnBalloons(currentQ);
+        }
+
+        function nextQuestion() {
+            gameState.currentQuestionIdx++;
+            if (gameState.currentQuestionIdx >= gameState.questionsList.length) {
+                endGame();
+            } else {
+                loadQuestion();
+            }
+        }
+
+        function startGame() {
+            audioFx.init();
+            
+            if (!gameState.questionsList || gameState.questionsList.length === 0) {
+                gameState.questionsList = [...QUESTIONS_DATA].sort(() => Math.random() - 0.5);
+            }
+            gameState.currentQuestionIdx = 0;
+            gameState.score = 0;
+            gameState.correctCount = 0;
+            gameState.timeLeft = 90;
+            gameState.isPlaying = true;
+
+            elements.hudScore.textContent = 0;
+            elements.hudTimer.textContent = 90;
+
+            elements.startModal.classList.add('hidden');
+            elements.gameoverModal.classList.add('hidden');
+
+            loadQuestion();
+            updateBalloons();
+
+            clearInterval(gameState.timerInterval);
+            gameState.timerInterval = setInterval(() => {
+                gameState.timeLeft--;
+                elements.hudTimer.textContent = gameState.timeLeft;
+
+                if (gameState.timeLeft <= 0) {
+                    endGame();
+                }
+            }, 1000);
+
+            if (elements.cameraToggle.checked) {
+                initMediaPipeHands();
+            }
+        }
+
+        function endGame() {
+            gameState.isPlaying = false;
+            clearInterval(gameState.timerInterval);
+
+            elements.finalScore.textContent = gameState.score;
+            elements.finalCorrect.textContent = `${gameState.correctCount}/${gameState.questionsList.length}`;
+
+            let starsHtml = '';
+            if (gameState.score >= 200) {
+                starsHtml = '<i class="fa-solid fa-star text-amber-400"></i><i class="fa-solid fa-star text-amber-400"></i><i class="fa-solid fa-star text-amber-400"></i>';
+                elements.summarySubtitle.textContent = "เยี่ยมยอดที่สุด! คุณคือผู้เชี่ยวชาญวิทยาศาสตร์ 🌟";
+            } else if (gameState.score >= 100) {
+                starsHtml = '<i class="fa-solid fa-star text-amber-400"></i><i class="fa-solid fa-star text-amber-400"></i><i class="fa-regular fa-star text-slate-300"></i>';
+                elements.summarySubtitle.textContent = "เก่งมากเลย! พยายามอีกนิดเพื่อเต็มสามดาว 👍";
+            } else {
+                starsHtml = '<i class="fa-solid fa-star text-amber-400"></i><i class="fa-regular fa-star text-slate-300"></i><i class="fa-regular fa-star text-slate-300"></i>';
+                elements.summarySubtitle.textContent = "ไม่เป็นไรนะ ลองใหม่อีกครั้งเพื่อทบทวนความรู้! ✌️";
+            }
+            elements.starsContainer.innerHTML = starsHtml;
+
+            elements.gameoverModal.classList.remove('hidden');
+        }
+
+        function initMediaPipeHands() {
+            elements.video.classList.remove('hidden');
+
+            const hands = new Hands({
+                locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+            });
+
+            hands.setOptions({
+                maxNumHands: 1,
+                modelComplexity: 1,
+                minDetectionConfidence: 0.6,
+                minTrackingConfidence: 0.6
+            });
+
+            hands.onResults(onHandResults);
+
+            const camera = new Camera(elements.video, {
+                onFrame: async () => {
+                    await hands.send({ image: elements.video });
+                },
+                width: 640,
+                height: 360
+            });
+
+            camera.start();
+        }
+
+        function onHandResults(results) {
+            if (!gameState.isPlaying) return;
+
+            const viewportRect = elements.balloonsContainer.getBoundingClientRect();
+
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                const landmarks = results.multiHandLandmarks[0];
+                const indexTip = landmarks[8];
+
+                const posX = (1 - indexTip.x) * viewportRect.width;
+                const posY = indexTip.y * viewportRect.height;
+
+                gameState.handX = posX;
+                gameState.handY = posY;
+
+                elements.handCursor.classList.remove('hidden');
+                elements.handCursor.style.left = `${posX}px`;
+                elements.handCursor.style.top = `${posY}px`;
+            } else {
+                elements.handCursor.classList.add('hidden');
+                gameState.handX = -100;
+                gameState.handY = -100;
+            }
+        }
+
+        aiModalElements.btnAskAi.addEventListener('click', async () => {
+            const currentQ = gameState.questionsList[gameState.currentQuestionIdx];
+            if (!currentQ) return;
+
+            aiModalElements.aiModal.classList.remove('hidden');
+            aiModalElements.aiLoading.classList.remove('hidden');
+            aiModalElements.aiContent.classList.add('hidden');
+            aiModalElements.btnSpeakTts.disabled = true;
+
+            try {
+                const exp = await fetchGeminiExplanation(currentQ.pair, currentQ.desc, currentQ.answer);
+                currentAiExplanation = exp;
+                aiModalElements.aiTextExplanation.textContent = exp;
+                aiModalElements.aiLoading.classList.add('hidden');
+                aiModalElements.aiContent.classList.remove('hidden');
+                aiModalElements.btnSpeakTts.disabled = false;
+            } catch (err) {
+                console.error(err);
+                aiModalElements.aiTextExplanation.textContent = "ไม่สามารถเชื่อมต่อครูวิทย์ AI ได้ในขณะนี้ กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ตหรือ API Key";
+                aiModalElements.aiLoading.classList.add('hidden');
+                aiModalElements.aiContent.classList.remove('hidden');
+            }
+        });
+
+        const closeAiModal = () => {
+            aiModalElements.aiModal.classList.add('hidden');
+            if (audioPlayer) {
+                audioPlayer.pause();
+                audioPlayer = null;
+            }
+            aiModalElements.ttsBtnLabel.textContent = "🔊 ฟังเสียงครูวิทย์ AI";
+        };
+        aiModalElements.btnCloseAiModal.addEventListener('click', closeAiModal);
+        aiModalElements.btnOkAiModal.addEventListener('click', closeAiModal);
+
+        aiModalElements.btnSpeakTts.addEventListener('click', async () => {
+            if (!currentAiExplanation) return;
+
+            if (audioPlayer && !audioPlayer.paused) {
+                audioPlayer.pause();
+                audioPlayer = null;
+                aiModalElements.ttsBtnLabel.textContent = "🔊 ฟังเสียงครูวิทย์ AI";
+                return;
+            }
+
+            aiModalElements.ttsBtnLabel.textContent = "⏳ กำลังสร้างเสียง...";
+            try {
+                const audioUrl = await fetchGeminiTTS(currentAiExplanation);
+                audioPlayer = new Audio(audioUrl);
+                audioPlayer.play();
+                aiModalElements.ttsBtnLabel.textContent = "⏹️ หยุดเล่นเสียง";
+                
+                audioPlayer.onended = () => {
+                    aiModalElements.ttsBtnLabel.textContent = "🔊 ฟังเสียงครูวิทย์ AI";
+                };
+            } catch (err) {
+                console.error(err);
+                aiModalElements.ttsBtnLabel.textContent = "❌ ไม่สามารถเล่นเสียงได้";
+                setTimeout(() => {
+                    aiModalElements.ttsBtnLabel.textContent = "🔊 ฟังเสียงครูวิทย์ AI";
+                }, 2000);
+            }
+        });
+
+        const handleGenAiQuestions = async (btnEl) => {
+            const originalText = btnEl.innerHTML;
+            btnEl.disabled = true;
+            btnEl.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> กำลังสร้างโจทย์ด้วย AI...`;
+
+            try {
+                const newQuestions = await generateAiQuestionsSet();
+                if (newQuestions && newQuestions.length > 0) {
+                    gameState.questionsList = newQuestions.map((q, idx) => ({
+                        id: idx + 1,
+                        pair: q.pair,
+                        emoji: q.emoji || "🔬",
+                        desc: q.desc,
+                        answer: q.answer
+                    }));
+                    showToast("สร้างโจทย์สำเร็จด้วย Gemini AI! 🎉", true);
+                    startGame();
+                }
+            } catch (err) {
+                console.error(err);
+                showToast("ไม่สามารถสร้างโจทย์ได้ ลองอีกครั้ง", false);
+            } finally {
+                btnEl.disabled = false;
+                btnEl.innerHTML = originalText;
+            }
+        };
+
+        aiModalElements.btnGenAiStart.addEventListener('click', () => handleGenAiQuestions(aiModalElements.btnGenAiStart));
+        aiModalElements.btnGenAiOver.addEventListener('click', () => handleGenAiQuestions(aiModalElements.btnGenAiOver));
+
+        aiModalElements.btnOpenSettings.addEventListener('click', () => {
+            aiModalElements.inputApiKey.value = customGeminiKey;
+            aiModalElements.settingsModal.classList.remove('hidden');
+        });
+        aiModalElements.btnCloseSettings.addEventListener('click', () => {
+            aiModalElements.settingsModal.classList.add('hidden');
+        });
+        aiModalElements.btnSaveSettings.addEventListener('click', () => {
+            customGeminiKey = aiModalElements.inputApiKey.value.trim();
+            localStorage.setItem('gemini_api_key', customGeminiKey);
+            aiModalElements.settingsModal.classList.add('hidden');
+            showToast("บันทึก API Key เรียบร้อยแล้ว!", true);
+        });
+
+        const containerEl = document.getElementById('game-container');
+        containerEl.addEventListener('pointermove', (e) => {
+            if (!elements.cameraToggle.checked && gameState.isPlaying) {
+                const rect = elements.balloonsContainer.getBoundingClientRect();
+                const posX = e.clientX - rect.left;
+                const posY = e.clientY - rect.top;
+
+                gameState.handX = posX;
+                gameState.handY = posY;
+
+                elements.handCursor.classList.remove('hidden');
+                elements.handCursor.style.left = `${posX}px`;
+                elements.handCursor.style.top = `${posY}px`;
+            }
+        });
+
+        function resizeCanvas() {
+            elements.arCanvas.width = elements.balloonsContainer.clientWidth;
+            elements.arCanvas.height = elements.balloonsContainer.clientHeight;
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        window.addEventListener('load', () => {
+            resizeCanvas();
+        });
+
+        elements.btnStart.addEventListener('click', startGame);
+        elements.btnRestart.addEventListener('click', startGame);
+    </script>
+</body>
+</html>
